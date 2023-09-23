@@ -1,0 +1,217 @@
+%code requires {
+  #include "../inc/assembler.hpp"
+
+  extern int yylex();
+  extern int yyparse();
+  extern FILE *yyin;
+
+  void yyerror(const char *s);
+}
+
+%{
+
+  extern unsigned int lc;
+  extern bool isFirstPass;
+  extern unsigned int lineNum;
+
+%}
+
+%union {
+  std::string* arg; //lexer ovo prosledjuje pojedinacno
+  Args* args; //parser spaja argumente linije koje lexer posalje
+}
+
+%token ENDL
+%token GLOBAL EXTERN SECTION WORD SKIP ASCII EQU END
+%token HALT INT IRET CALL RET JMP BEQ BNE BGT PUSH POP XCHG ADD SUB MUL DIV NOT AND OR XOR SHL SHR LD ST CSRRD CSRWR
+
+%token<arg> R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 STATUS HANDLER CAUSE
+%token<arg> LIT
+%token<arg> SYMB
+
+%type<arg> register
+%type<arg> sysReg
+%type<args> symbList
+%type<args> litSymbList
+%type<args> instrOperand
+%type<arg> jmpOperand
+
+%%
+
+file: 
+      line 
+    | file ENDL line 
+    ;
+
+line: 
+      %empty
+    | SYMB ':' { if(isFirstPass) symbDef($1); }
+    | directive 
+    | instruction { lc+=4; }
+    | SYMB ':' directive { if(isFirstPass) symbDef($1); }
+    | SYMB ':' instruction { if(isFirstPass) symbDef($1); lc+=4; }
+    ;
+
+directive:
+      GLOBAL symbList { if(isFirstPass) dirGlobal($2); delete $2; }
+    | EXTERN symbList { if(isFirstPass) dirExtern($2); delete $2; }
+    | SECTION SYMB { dirSection($2); delete $2; }
+    | WORD litSymbList { if(isFirstPass) lc+=(4 * $2->argNames->size()); else dirWord($2); delete $2; }
+    | SKIP LIT { dirSkip($2); delete $2; }
+    | ASCII '"' SYMB '"' { lc += $3->length(); if(!isFirstPass) dirAscii($3); delete $3; }
+    | EQU SYMB ',' LIT { std::cout << "Nasao equ " << *($2) << *($4) << std::endl; delete $2; delete $4; }
+    | END { dirEnd(); return 100; }
+    ;
+
+instruction:
+      HALT { if(!isFirstPass) instrHalt(); }
+    | INT { if(!isFirstPass) instrInt(); }
+    | IRET { instrIret(); }
+    | CALL jmpOperand { instrCall($2); delete $2; }
+    | RET { if(!isFirstPass) instrRet(); }
+    | JMP jmpOperand { instrJmp($2); delete $2; }
+    | BEQ register ',' register ',' jmpOperand { instrBeq($2, $4, $6); delete $2; delete $4; delete $6; }
+    | BNE register ',' register ',' jmpOperand { instrBne($2, $4, $6); delete $2; delete $4; delete $6; }
+    | BGT register ',' register ',' jmpOperand { instrBgt($2, $4, $6); delete $2; delete $4; delete $6; }
+    | PUSH register { if(!isFirstPass) instrPush($2); delete $2; }
+    | POP register { if(!isFirstPass) instrPop($2); delete $2; }
+    | XCHG  register ',' register { if(!isFirstPass) instrXchg($2, $4); delete $2; delete $4; }
+    | ADD register ',' register { if(!isFirstPass) instrAdd($2, $4); delete $2; delete $4; }
+    | SUB register ',' register { if(!isFirstPass) instrSub($2, $4); delete $2; delete $4; }
+    | MUL register ',' register { if(!isFirstPass) instrMul($2, $4); delete $2; delete $4; }
+    | DIV register ',' register { if(!isFirstPass) instrDiv($2, $4); delete $2; delete $4; }
+    | NOT register { if(!isFirstPass) instrNot($2); delete $2; }
+    | AND register ',' register { if(!isFirstPass) instrAnd($2, $4); delete $2; delete $4; }
+    | OR register ',' register { if(!isFirstPass) instrOr($2, $4); delete $2; delete $4; }
+    | XOR  register ',' register { if(!isFirstPass) instrXor($2, $4); delete $2; delete $4; }
+    | SHL register ',' register { if(!isFirstPass) instrShl($2, $4); delete $2; delete $4; }
+    | SHR register ',' register { if(!isFirstPass) instrShr($2, $4); delete $2; delete $4; }
+    | LD instrOperand ',' register { instrLd($2, $4); delete $2; delete $4; }
+    | ST register ',' instrOperand  { instrSt($2, $4); delete $2; delete $4; }
+    | CSRRD sysReg ',' register { if(!isFirstPass) instrCsrrd($2, $4); delete $2; delete $4; }
+    | CSRWR register ',' sysReg { if(!isFirstPass) instrCsrwr($2, $4); delete $2; delete $4; }
+    ; 
+    
+register: 
+      R0 { $$ = $1; }
+    | R1 { $$ = $1; }
+    | R2 { $$ = $1; }
+    | R3 { $$ = $1; }
+    | R4 { $$ = $1; }
+    | R5 { $$ = $1; }
+    | R6 { $$ = $1; }
+    | R7 { $$ = $1; }
+    | R8 { $$ = $1; }
+    | R9 { $$ = $1; }
+    | R10 { $$ = $1; }
+    | R11 { $$ = $1; }
+    | R12 { $$ = $1; }
+    | R13 { $$ = $1; }
+    | R14 { $$ = $1; }
+    | R15 { $$ = $1; }
+    ;
+
+sysReg: 
+      STATUS { $$ = $1; }
+    | HANDLER { $$ = $1; }
+    | CAUSE { $$ = $1; }
+    ;
+
+symbList: 
+      SYMB { $$ = new Args(opmode::NOTOP, $1, argtype::SYMBOL); }
+    | symbList ',' SYMB { $1->argNames->push_back($3); $1->argTypes->push_back(argtype::SYMBOL); $$ = $1; }
+    ;
+
+litSymbList: 
+      LIT { $$ = new Args(opmode::NOTOP, $1, argtype::LITERAL); }
+    | SYMB { $$ = new Args(opmode::NOTOP, $1, argtype::SYMBOL); }
+    | litSymbList ',' LIT { $1->argNames->push_back($3); $1->argTypes->push_back(argtype::LITERAL); $$ = $1; }
+    | litSymbList ',' SYMB { $1->argNames->push_back($3); $1->argTypes->push_back(argtype::SYMBOL); $$ = $1; }
+    ;
+
+instrOperand:
+      LIT { $$ = new Args(opmode::MEMDIRLIT, $1, argtype::LITERAL); }
+    | SYMB { $$ = new Args(opmode::MEMDIRSYMB, $1, argtype::SYMBOL); }
+    | '$' LIT { $$ = new Args(opmode::IMMEDLIT, $2, argtype::LITERAL); }
+    | '$' SYMB { $$ = new Args(opmode::IMMEDSYMB, $2, argtype::SYMBOL); }
+    | register { $$ = new Args(opmode::REGDIR, $1, argtype::REGISTER); }
+    | '[' register ']' { $$ = new Args(opmode::REGIND, $2, argtype::REGISTER); }
+    | '[' register '+' LIT ']' { $$ = new Args(opmode::REGINDPOMLIT, $2, argtype::REGISTER); $$->argNames->push_back($4); $$->argTypes->push_back(argtype::LITERAL); }
+    | '[' register '+' SYMB ']' { $$ = new Args(opmode::REGINDPOMSYMB, $2, argtype::REGISTER); $$->argNames->push_back($4); $$->argTypes->push_back(argtype::SYMBOL); }
+    ;
+
+jmpOperand: 
+      LIT { $$ = $1; }
+    | SYMB { $$ = $1; }
+    ; 
+ 
+%%
+
+int pMain(int argc, char* argv[]) {
+
+  FILE *fp = NULL;
+  if(argc == 2){
+    fp = fopen(argv[1], "r");
+
+    if(fp == NULL){
+      perror("Failed to open file");
+      return -1;
+    }
+    else{
+      yyin = fp;
+    }
+  }
+  else if(argc == 4){
+    fp = fopen(argv[3], "r");
+
+    if(fp == NULL){
+      perror("Failed to open file");
+      return -1;
+    }
+    else{
+      yyin = fp;
+    }
+  }
+
+  while (yyparse() != 100) {};
+  if (fp != NULL) fclose(fp);
+
+  isFirstPass = false;
+  lc = 0;
+  lineNum = 0;
+
+  if(argc == 2){
+    fp = fopen(argv[1], "r");
+    if(fp == NULL){
+      perror("Failed to open file");
+      return -1;
+    }
+    else yyin = fp;
+  }
+  else if(argc == 4){
+    fp = fopen(argv[3], "r");
+    if(fp == NULL){
+      perror("Failed to open file");
+      return -1;
+    }
+    else yyin = fp;
+  }
+  if(fp == NULL) {
+    perror("Failed to open file.");
+    return -1;
+  }
+  else yyin = fp;
+
+  while (yyparse() != 100) {};
+  if (fp != NULL) fclose(fp);
+
+  freeMem();
+  return 0;
+
+}
+
+void yyerror(const char *s) {
+  freeMem();
+  std::cout << "Greska u asembliranju na liniji " << lineNum << "!  Uzrok: " << s << std::endl;
+  exit(-1);
+}

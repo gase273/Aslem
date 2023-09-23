@@ -1,0 +1,79 @@
+%{
+
+#include "../build/parser.tab.hpp"
+
+unsigned int lineNum = 1;
+
+%}
+
+%option noyywrap
+
+%%
+
+\: { return ':'; }
+\, { return ','; }
+\+ { return '+'; }
+\[ { return '['; }
+\] { return ']'; }
+\$ { return '$'; }
+\" { return '"'; }
+".global"|".GLOBAL" { return GLOBAL; }
+".extern"|".EXTERN" { return EXTERN; }
+".section"|".SECTION" { return SECTION; }
+".word"|".WORD" { return WORD; }
+".skip"|".SKIP" { return SKIP; }
+".ascii"|".ASCII" { return ASCII; }
+".equ"|".EQU" { return EQU; }
+".end"|".END" { return END; }
+"halt"|"HALT" { return HALT; }
+"int"|"INT" { return INT; }
+"iret"|"IRET" { return IRET; }
+"call"|"CALL" { return CALL; }
+"ret"|"RET" { return RET; }
+"jmp"|"JMP" { return JMP; }
+"beq"|"BEQ" { return BEQ; }
+"bne"|"BNE" { return BNE; }
+"bgt"|"BGT" { return BGT; }
+"push"|"PUSH" { return PUSH; }
+"pop"|"POP" { return POP; }
+"xchg"|"XCHG" { return XCHG; }
+"add"|"ADD" { return ADD; }
+"sub"|"SUB" { return SUB; }
+"mul"|"MUL" { return MUL; }
+"div"|"DIV" { return DIV; }
+"not"|"NOT" { return NOT; }
+"and"|"AND" { return AND; }
+"or"|"OR" { return OR; }
+"xor"|"XOR" { return XOR; }
+"shl"|"SHL" { return SHL; }
+"shr"|"SHR" { return SHR; }
+"ld"|"LD" { return LD; }
+"st"|"ST" { return ST; }
+"csrrd"|"CSRRD" { return CSRRD; }
+"csrwr"|"CSRWR" { return CSRWR; }
+"%r0"|"%R0" { yylval.arg = new std::string("R0"); return R0; }
+"%r1"|"%R1" { yylval.arg = new std::string("R1"); return R1; }
+"%r2"|"%R2" { yylval.arg = new std::string("R2"); return R2; }
+"%r3"|"%R3" { yylval.arg = new std::string("R3"); return R3; }
+"%r4"|"%R4" { yylval.arg = new std::string("R4"); return R4; }
+"%r5"|"%R5" { yylval.arg = new std::string("R5"); return R5; }
+"%r6"|"%R6" { yylval.arg = new std::string("R6"); return R6; }
+"%r7"|"%R7" { yylval.arg = new std::string("R7"); return R7; }
+"%r8"|"%R8" { yylval.arg = new std::string("R8"); return R8; }
+"%r9"|"%R9" { yylval.arg = new std::string("R9"); return R9; }
+"%r10"|"%R10" { yylval.arg = new std::string("R10"); return R10; }
+"%r11"|"%R11" { yylval.arg = new std::string("R11"); return R11; }
+"%r12"|"%R12" { yylval.arg = new std::string("R12"); return R12; }
+"%r13"|"%R13" { yylval.arg = new std::string("R13"); return R13; }
+"%r14"|"%R14"|"%sp"|"%SP" { yylval.arg = new std::string("R14"); return R14; }
+"%r15"|"%R15"|"%pc"|"%PC" { yylval.arg = new std::string("R15"); return R15; }
+"%status"|"%STATUS" { yylval.arg = new std::string("STATUS"); return STATUS; }
+"%handler"|"%HANDLER" { yylval.arg = new std::string("HANDLER"); return HANDLER; }
+"%cause"|"%CAUSE" { yylval.arg = new std::string("CAUSE"); return CAUSE; }
+(([-]?[0-9]+)|(0x[0-9a-fA-F]+)|(0[0-7]+)|(0b[01]+)) { yylval.arg = new std::string(yytext); return LIT;}
+[a-zA-Z][a-zA-Z0-9_]* { yylval.arg = new std::string(yytext); return SYMB; }
+[ \t] {}
+\n { ++lineNum; return ENDL;}
+#.* { ++lineNum; }
+. {}
+%%
